@@ -139,14 +139,38 @@ public class MainScript extends GhidraScript {
 		
 		fnsToAnalyze.forEach(fn -> {
 			// Your code here!
-			
+			// Grabing pcode
+			System.out.println(fn.getName());
+			fn2Pcode(fn).forEach(pcode -> {
+				if(pcode.getOpcode() == PcodeOp.COPY) {
+					// Looking at a COPY op
+					Varnode input = pcode.getInput(0);
+					Long offset = input.getOffset();
+					Data data = this.getCurrentProgram().getListing().getDataAt(toAddr(offset));
+					if(data != null && StringDataInstance.isString(data)) {
+						var strVal = (String) data.getValue();
+						// We found our string
+						if(frontendKeys.contains(strVal)) {
+							var usePcode = pcode.getOutput().getLoneDescend();
+							if(usePcode != null && usePcode.getOpcode() == PcodeOp.CALL) {
+								pcodeCalls.add((PcodeOpAST)usePcode);
+							}
+						}
+					}
+				}
+			});
 		});
 		
 		return pcodeCalls;
 	}
 	
 	private MultiSet<Function> pcall2Fn(Set<PcodeOpAST> sinkCallOperations) {
-		List<Function> calls = null; // Your code here!
+		List<Function> calls = sinkCallOperations.stream()
+				.map(pcode -> this.getCurrentProgram()
+						.getFunctionManager()
+						.getFunctionAt(this.toAddr(pcode.getInput(0).getOffset())))
+				.collect(Collectors.toList());
+		
 		return new HashMultiSet<>(calls);
 	}
 	
@@ -156,26 +180,121 @@ public class MainScript extends GhidraScript {
 		Set<PcodeOpAST> sinkPCalls = new HashSet<>();
 		
 		pcodes.forEach(pcode -> {
-			// Your code here!
 			
+			if(pcode.getOpcode() == PcodeOp.PTRSUB) {
+				Register reg = this.getCurrentProgram().getRegister(pcode.getInput(0));
+				if(reg != null && reg.isBaseRegister()) {
+					long stackOffset = pcode.getInput(1).getOffset();
+					
+					
+					// Get next pcode
+					PcodeOp nextPcode = pcode.getOutput().getLoneDescend();
+					// Moving pcode if we are dealing with a CAST
+					if(nextPcode != null && nextPcode.getOpcode() == PcodeOp.CAST) {
+						pcode = (PcodeOpAST) nextPcode;
+						nextPcode = nextPcode.getOutput().getLoneDescend();
+					}
+					
+					// Did we reach a call?
+					if(nextPcode != null && nextPcode.getOpcode() == PcodeOp.CALL) {
+						long callOffset =  nextPcode.getInput(0).getOffset();
+						Function called = this.getCurrentProgram().getFunctionManager().getFunctionAt(this.toAddr(callOffset));
+						
+						if(tainted.contains(stackOffset)) {
+							// Stack offset is tainted
+							if(called.getName().equals(sink) && pcode.getOutput() == nextPcode.getInput(sinkParam)) {
+								sinkPCalls.add((PcodeOpAST) nextPcode);
+							}
+							
+						}else {
+							// stack offset not yet tainted
+							if (called.getName().equals(source) && pcode.getOutput() == nextPcode.getInput(sourceParam)) {
+								tainted.add(stackOffset);
+							}
+							
+						}
+					}
+				}
+			}
 		});
 		
 		return sinkPCalls;
 	}
 
 	protected void run() throws Exception {
+		
+		System.out.println("Make sure to uncomment call to the correponding task implentation you want to run");
+		
 		/** Task 5 - your code here! */
-
+		// task5();
 		
 		/** Task 7 - your code here! */
-
+		// task7();
 		
 		/** Task 8 - your code here! */
-		
+		// task8();
 
 		/** Task 8.1 - your code here! */
+		// task8Dot1();
+	}
+	
+	private void task5() {
+		System.out.println("------ TASK 5 --------");
 		
+		Set<String> frontendKeys = loadStrings("C:\\Users\\dfrwseu2024\\Desktop\\frontend_keys.txt");
+		Set<PcodeOpAST> sinkCalloperations = sinksOf(frontendKeys); // Done
+		MultiSet<Function> sinksFunctions = pcall2Fn(sinkCalloperations);
+		System.out.println(sinksFunctions);
 		
+	}
+	
+	private void task7() {
+		System.out.println("------ TASK 7 --------");
+		
+		Set<String> nvramKeys = Set.of("ap_support_mode","ap_mode_cur");
+		// call where strings sink inot
+		Set<PcodeOpAST> nvramKeySinks = sinksOf(nvramKeys);
+		
+		Set<Function> fnsContainingKeys  = getFnsContaining(nvramKeys);
+		
+		fnsContainingKeys.forEach(fn ->{
+			Set<PcodeOpAST> taintSinks = findSourceSinkPaths(fn, "websGetVar", 3, "acosNvramConfig_set", 2);
+			Set<PcodeOpAST> intersection = taintSinks.stream()
+					.filter(pcode -> {
+						return nvramKeySinks.contains(pcode);
+					})
+					.collect(Collectors.toSet());
+			intersection.forEach(pcode ->{
+				System.out.println(pcode.getSeqnum().getTarget());
+			});
+		});
+		
+	}
+	private void task8() {
+		System.out.println("------ TASK 8 --------");
+		
+		var fnsA  = getFnsContaining(Set.of("ap_support_mode"));
+		var fnsB  = getFnsContaining(Set.of("ap_mode_cur"));
+		fnsA.retainAll(fnsB);
+		
+		System.out.println(fnsA);
+	}
+	
+	private void task8Dot1() {
+		System.out.println("------ TASK 8.1 --------");
+		
+		Set<String> nvramKeys = Set.of("ap_mode_cur");
+		Set<Function> fnsContainingKeys  = getFnsContaining(nvramKeys);
+		
+		fnsContainingKeys.forEach(fn ->{
+			Set<PcodeOpAST> taintSinks = findSourceSinkPaths(fn, "sprintf", 1, "system", 1);
+
+			taintSinks.forEach(pcode ->{
+				System.out.println(pcode.getSeqnum().getTarget());
+			});
+		});
+			
 	}
 
 }
+
