@@ -287,6 +287,7 @@ public class MainScript extends GhidraScript {
 		Set<Function> fnsContainingKeys  = getFnsContaining(nvramKeys);
 		
 		fnsContainingKeys.forEach(fn ->{
+			System.out.println("8.1 Fn: " + fn.getName());
 			Set<PcodeOpAST> taintSinks = findSourceSinkPaths(fn, "sprintf", 1, "system", 1);
 
 			taintSinks.forEach(pcode ->{
