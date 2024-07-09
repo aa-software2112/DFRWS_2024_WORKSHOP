@@ -291,7 +291,7 @@ public class MainScript extends GhidraScript {
 			Set<PcodeOpAST> taintSinks = findSourceSinkPaths(fn, "sprintf", 1, "system", 1);
 
 			taintSinks.forEach(pcode ->{
-				System.out.println(pcode.getSeqnum().getTarget());
+				System.out.println("Candidate Address: " + pcode.getSeqnum().getTarget());
 			});
 		});
 			
